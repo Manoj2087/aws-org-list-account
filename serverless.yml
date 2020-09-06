@@ -1,0 +1,82 @@
+service: aws-org-list-account
+frameworkVersion: '1'
+
+provider:
+  name: aws
+  runtime: python3.8
+  iamRoleStatements:
+    - Effect: "Allow"
+      Action:
+        - "organizations:ListAccounts"
+      Resource: "*"
+    - Effect: "Allow"
+      Action:
+        - "s3:PutObject"
+        - "s3:PutObjectAcl"
+      Resource:
+        Fn::Join:
+          - ""
+          - - "arn:aws:s3:::"
+            - "Ref": "AWSAccountsS3"
+            - "/*"
+custom:
+  accountsPath: '/AWSAccounts'
+functions:
+  aws-org-list-account:
+    handler: handler.main
+    events:
+      - schedule: rate(1 day)
+    environment:
+      ACCOUNTS3BUCKET: !Ref AWSAccountsS3
+      ACCOUNTSPATH: ${self:custom.accountsPath}
+# you can add CloudFormation resource templates here
+resources:
+  Resources:
+    AWSAccountDatabase:
+      Type: 'AWS::Glue::Database'
+      Properties:
+        DatabaseInput:
+          Name: 'aws_accounts_db'
+        CatalogId: !Ref AWS::AccountId
+    AWSAccountTable:
+      Type: 'AWS::Glue::Table'
+      Properties:
+        DatabaseName: !Ref AWSAccountDatabase
+        CatalogId: !Ref AWS::AccountId
+        TableInput:
+          Name: 'aws_accounts'
+          TableType: 'EXTERNAL_TABLE'
+          Parameters: {
+            "skip.header.line.count": "1",
+            "compressionType": "none",
+            "classification": "csv",
+            "columnsOrdered": "true",
+            "areColumnsQuoted": "false",
+            "delimiter": ",",
+            "typeOfData": "file"            
+          }
+          StorageDescriptor:
+            StoredAsSubDirectories: False
+            Columns:
+              - Name: cust_account_id
+                Type: 'string'
+              - Name: cust_account_name
+                Type: 'string'
+              - Name: cust_account_status
+                Type: 'string'
+            InputFormat: 'org.apache.hadoop.mapred.TextInputFormat'
+            OutputFormat: 'org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat'
+            SerdeInfo:
+              Parameters: {
+                "field.delim": ","
+              }
+              SerializationLibrary: 'org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe'
+            Location: 
+              Fn::Join:
+                - ""
+                - - "s3://"
+                  - !Ref AWSAccountsS3
+                  - ${self:custom.accountsPath}
+                  - "/"
+    AWSAccountsS3:
+      Type: AWS::S3::Bucket
