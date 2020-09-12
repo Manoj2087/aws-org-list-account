@@ -53,7 +53,7 @@ resources:
             "columnsOrdered": "true",
             "areColumnsQuoted": "false",
             "delimiter": ",",
-            "typeOfData": "file"            
+            "typeOfData": "file"
           }
           StorageDescriptor:
             StoredAsSubDirectories: False
